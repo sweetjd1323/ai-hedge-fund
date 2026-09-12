@@ -50,7 +50,6 @@ def fetch_market_data(symbol: str):
     }
 
 def get_ai_decision(data: dict, symbol: str) -> dict:
-    # Rule Penalty Check
     penalty = sum(r["confidence_reduction_points"] for r in bot.learned_rules if r["affected_symbol"] in [symbol, "ALL"])
     
     rsi = data["rsi"]
@@ -63,10 +62,10 @@ def get_ai_decision(data: dict, symbol: str) -> dict:
 
     if rsi < 38 and trend == "BULLISH":
         sig = "BUY" if final_conf >= 65 else "HOLD"
-        return {"signal": sig, "confidence_score": final_conf, "sl": round(price - (1.5 * atr), 5), "tp": round(price + (3.0 * atr), 5), "logic": f"RSI Oversold in Bullish Trend. Applied penalty: -{penalty} pts"}
+        return {"signal": sig, "confidence_score": final_conf, "sl": round(price - (1.5 * atr), 5), "tp": round(price + (3.0 * atr), 5), "logic": f"RSI Oversold in Bullish Trend. Penalty: -{penalty} pts"}
     elif rsi > 67 and trend == "BEARISH":
         sig = "SELL" if final_conf >= 65 else "HOLD"
-        return {"signal": sig, "confidence_score": final_conf, "sl": round(price + (1.5 * atr), 5), "tp": round(price - (3.0 * atr), 5), "logic": f"RSI Exhaustion in Bearish Trend. Applied penalty: -{penalty} pts"}
+        return {"signal": sig, "confidence_score": final_conf, "sl": round(price + (1.5 * atr), 5), "tp": round(price - (3.0 * atr), 5), "logic": f"RSI Exhaustion in Bearish Trend. Penalty: -{penalty} pts"}
     
     return {"signal": "HOLD", "confidence_score": 40, "sl": 0, "tp": 0, "logic": f"Consolidation. Strict risk filter active (-{penalty} pts)."}
 
@@ -87,12 +86,23 @@ async def quant_loop():
     while True:
         try:
             if bot.is_running:
-                # Update positions & check SL/TP
                 for pos in list(bot.open_positions):
                     data = fetch_market_data(pos["symbol"])
                     curr = data["bid"] if pos["type"] == "BUY" else data["ask"]
                     diff = (curr - pos["price_open"]) if pos["type"] == "BUY" else (pos["price_open"] - curr)
-                    pos["profit"] = round(diff * pos["volume"] * 10000, 2)
+                    
+                    # Pip multiplier fix for each asset class
+                    sym = pos["symbol"]
+                    if sym in ["EURUSD", "GBPUSD"]:
+                        mult = 100000
+                    elif sym == "USDJPY":
+                        mult = 1000
+                    elif sym == "XAUUSD":
+                        mult = 100
+                    else:  # BTCUSD and Crypto
+                        mult = 1.0
+
+                    pos["profit"] = round(diff * pos["volume"] * mult, 2)
 
                     hit_tp = curr >= pos["tp"] if pos["type"] == "BUY" else curr <= pos["tp"]
                     hit_sl = curr <= pos["sl"] if pos["type"] == "BUY" else curr >= pos["sl"]
@@ -105,7 +115,6 @@ async def quant_loop():
                         pos["exit_time"] = datetime.now(timezone.utc).strftime("%H:%M:%S")
                         bot.trade_history.append(pos)
                         
-                        # Max Drawdown & Peak tracking
                         if bot.equity > bot.peak_equity:
                             bot.peak_equity = bot.equity
                         dd = ((bot.peak_equity - bot.equity) / bot.peak_equity) * 100
@@ -114,7 +123,6 @@ async def quant_loop():
                         if pos["outcome"] == "LOSS":
                             run_self_learning_audit()
 
-                # Scan Assets
                 for sym in SYMBOLS:
                     m = fetch_market_data(sym)
                     dec = get_ai_decision(m, sym)
@@ -129,7 +137,7 @@ async def quant_loop():
                                 "ticket": bot.ticket_counter,
                                 "symbol": sym,
                                 "type": dec["signal"],
-                                "volume": 0.1,
+                                "volume": 0.05 if sym == "BTCUSD" else 0.1,
                                 "price_open": m["ask"] if dec["signal"] == "BUY" else m["bid"],
                                 "sl": dec["sl"],
                                 "tp": dec["tp"],
@@ -226,4 +234,4 @@ async def ui():
     </body>
     </html>
     """
-    
+                    
