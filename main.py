@@ -2,19 +2,15 @@ import os
 import json
 import asyncio
 import logging
+import urllib.request
 from datetime import datetime, timezone
-import aiohttp
 from fastapi import FastAPI
 from fastapi.responses import HTMLResponse, JSONResponse
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 logger = logging.getLogger("QuantDesk")
 
-app = FastAPI(title="Autonomous Quant Executive Terminal v3.0")
-
-# Telegram Configuration (Optional - Environment variables ma mukvu hoy to)
-TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "")
-TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID", "")
+app = FastAPI(title="Autonomous Quant 24H Audit Terminal")
 
 SYMBOLS = ["SOLUSD", "ETHUSD", "GBPUSD", "EURUSD", "BTCUSD", "XAUUSD"]
 DB_FILE = "quant_memory.json"
@@ -65,15 +61,6 @@ def load_state():
                 bot.ticket_counter = d.get("ticket_counter", 100001)
         except Exception as e:
             logger.error(f"Load error: {e}")
-
-async def send_telegram(msg: str):
-    if TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID:
-        try:
-            url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
-            async with aiohttp.ClientSession() as session:
-                await session.post(url, json={"chat_id": TELEGRAM_CHAT_ID, "text": msg, "parse_mode": "Markdown"})
-        except Exception as e:
-            logger.error(f"Telegram alert error: {e}")
 
 def fetch_market_data(symbol: str):
     import random
@@ -184,9 +171,6 @@ async def quant_loop():
 
                         audit_and_learn(record)
                         save_state()
-                        
-                        alert_icon = "🎯" if outcome == "TP HIT" else "🛑"
-                        await send_telegram(f"{alert_icon} *TRADE CLOSED [{outcome}]*\nSymbol: `{pos['symbol']}`\nSide: `{pos['type']}`\nPnL: `${pos['profit']}`\nLogic: _{pos['logic']}_")
 
                 for sym in SYMBOLS:
                     m = fetch_market_data(sym)
@@ -216,7 +200,6 @@ async def quant_loop():
                                 "profit": 0.0
                             }
                             bot.open_positions.append(new_pos)
-                            await send_telegram(f"⚡ *NEW POSITION OPENED*\nSymbol: `{sym}`\nSide: `{dec['signal']}`\nPrice: `{new_pos['price_open']}`\nTP: `{dec['tp']}` | SL: `{dec['sl']}`\nLogic: _{dec['logic']}_")
                     await asyncio.sleep(0.3)
 
         except Exception as e:
@@ -473,4 +456,23 @@ async def ui():
             document.getElementById('wrVal').innerText = data.winrate_display + ' (' + data.total_closed + ')';
             document.getElementById('tpHitVal').innerText = data.tp_count;
             document.getElementById('slHitVal').innerText = data.sl_count;
-            document.getElementById('ddVal').
+            document.getElementById('ddVal').innerText = data.drawdown_display;
+            document.getElementById('nodesVal').innerText = data.nodes_count;
+            document.getElementById('synVal').innerText = data.synergy;
+
+            const posBody = document.getElementById('posBody');
+            posBody.innerHTML = data.positions.length ? data.positions.map(p => `
+              <tr>
+                <td style="color:#fff; font-weight:bold;">${p.symbol}</td>
+                <td style="color:${p.type==='BUY'?'#22c55e':'#ef4444'}; font-weight:bold;">${p.type}</td>
+                <td>${p.logic}</td>
+                <td style="text-align:right;" class="${p.profit>=0?'pnl-pos':'pnl-neg'}">${p.profit>=0?'+$':'-$'}${Math.abs(p.profit).toFixed(2)}</td>
+              </tr>
+            `).join('') : '<tr><td colspan="4" style="color:#4b5563;">Monitoring market structure...</td></tr>';
+
+            const closedBody = document.getElementById('closedBody');
+            closedBody.innerHTML = data.closed_trades.length ? data.closed_trades.map(c => `
+              <tr>
+                <td>${c.time}</td>
+                <td>#${c.ticket}</td>
+                <td 
