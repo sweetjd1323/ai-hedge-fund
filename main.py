@@ -1,8 +1,6 @@
 import os
-import json
 import asyncio
 import logging
-import urllib.request
 from datetime import datetime, timezone
 from fastapi import FastAPI
 from fastapi.responses import HTMLResponse, JSONResponse
@@ -13,7 +11,6 @@ logger = logging.getLogger("QuantDesk")
 app = FastAPI(title="Autonomous Quant 24H Audit Terminal")
 
 SYMBOLS = ["SOLUSD", "ETHUSD", "GBPUSD", "EURUSD", "BTCUSD", "XAUUSD"]
-DB_FILE = "quant_memory.json"
 
 class BotState:
     def __init__(self):
@@ -32,35 +29,6 @@ class BotState:
         self.synergy = 99.9
 
 bot = BotState()
-
-def save_state():
-    try:
-        data = {
-            "equity": bot.equity,
-            "peak_equity": bot.peak_equity,
-            "max_drawdown": bot.max_drawdown,
-            "closed_trades": bot.closed_trades,
-            "learned_rules": bot.learned_rules,
-            "ticket_counter": bot.ticket_counter
-        }
-        with open(DB_FILE, "w") as f:
-            json.dump(data, f)
-    except Exception as e:
-        logger.error(f"Save error: {e}")
-
-def load_state():
-    if os.path.exists(DB_FILE):
-        try:
-            with open(DB_FILE, "r") as f:
-                d = json.load(f)
-                bot.equity = d.get("equity", 10000.0)
-                bot.peak_equity = d.get("peak_equity", 10000.0)
-                bot.max_drawdown = d.get("max_drawdown", 0.0)
-                bot.closed_trades = d.get("closed_trades", [])
-                bot.learned_rules = d.get("learned_rules", [])
-                bot.ticket_counter = d.get("ticket_counter", 100001)
-        except Exception as e:
-            logger.error(f"Load error: {e}")
 
 def fetch_market_data(symbol: str):
     import random
@@ -170,7 +138,6 @@ async def quant_loop():
                         bot.max_drawdown = round(max(bot.max_drawdown, dd), 2)
 
                         audit_and_learn(record)
-                        save_state()
 
                 for sym in SYMBOLS:
                     m = fetch_market_data(sym)
@@ -188,7 +155,7 @@ async def quant_loop():
                     if dec["signal"] in ["BUY", "SELL"] and len(bot.open_positions) < 4:
                         if not any(p["symbol"] == sym for p in bot.open_positions):
                             bot.ticket_counter += 1
-                            new_pos = {
+                            bot.open_positions.append({
                                 "ticket": bot.ticket_counter,
                                 "symbol": sym,
                                 "type": dec["signal"],
@@ -198,8 +165,7 @@ async def quant_loop():
                                 "tp": dec["tp"],
                                 "logic": dec["logic"],
                                 "profit": 0.0
-                            }
-                            bot.open_positions.append(new_pos)
+                            })
                     await asyncio.sleep(0.3)
 
         except Exception as e:
@@ -208,7 +174,6 @@ async def quant_loop():
 
 @app.on_event("startup")
 async def start():
-    load_state()
     asyncio.create_task(quant_loop())
 
 @app.get("/api/status")
@@ -243,7 +208,7 @@ async def ui():
     <head>
       <meta charset="UTF-8">
       <meta name="viewport" content="width=device-width, initial-scale=1.0">
-      <title>AUTONOMOUS QUANT v3.0 - 24H AUDIT DESK</title>
+      <title>AUTONOMOUS QUANT v2.0 - 24H AUDIT DESK</title>
       <style>
         * { box-sizing: border-box; margin: 0; padding: 0; }
         body {
@@ -350,7 +315,7 @@ async def ui():
 
           <div class="panel-box">
             <div class="box-title" style="color:#f59e0b;">SELF-LEARNING RULES (AI PENALTY LOG)</div>
-            <div id="learnBody"><div style="color:#4b5563; font-size:0.65rem;">Engine active. Analyzing losses to generate defensive filters...</div></div>
+            <div id="learnBody"><div style="color:#4b5563; font-size:0.65rem;">Engine active. Analyzing losses to generate real-time defensive filters...</div></div>
           </div>
         </div>
 
@@ -475,4 +440,23 @@ async def ui():
               <tr>
                 <td>${c.time}</td>
                 <td>#${c.ticket}</td>
-                <td 
+                <td style="color:#fff; font-weight:bold;">${c.symbol}</td>
+                <td>${c.type}</td>
+                <td>${c.entry} -> ${c.exit}</td>
+                <td>${c.logic}</td>
+                <td><span class="${c.status==='TP HIT'?'badge-tp':'badge-sl'}">${c.status}</span></td>
+                <td style="text-align:right;" class="${c.pnl>=0?'pnl-pos':'pnl-neg'}">${c.pnl>=0?'+$':'-$'}${Math.abs(c.pnl).toFixed(2)}</td>
+              </tr>
+            `).join('') : '<tr><td colspan="8" style="color:#4b5563;">No trades closed yet today. Orders are actively tracked above.</td></tr>';
+
+            const learnBody = document.getElementById('learnBody');
+            learnBody.innerHTML = data.learned_rules.length ? data.learned_rules.map(r => `
+              <div class="learn-item">
+                <div class="learn-title">⚠️ ${r.desc} (-${r.penalty} pts)</div>
+                <div class="learn-desc">${r.lesson}</div>
+              </div>
+            `).join('') : '<div style="color:#4b5563; font-size:0.65rem;">Engine active. Zero loss patterns detected so far.</div>';
+
+            const tbody = document.getElementById('streamBody');
+            tbody.innerHTML = data.stream.map(s => `
+         
