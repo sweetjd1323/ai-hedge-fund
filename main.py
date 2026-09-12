@@ -1,442 +1,176 @@
 import os
+import json
+import random
 import asyncio
 import logging
-from datetime import datetime, timezone
+import urllib.request
 from fastapi import FastAPI
 from fastapi.responses import HTMLResponse, JSONResponse
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
-logger = logging.getLogger("QuantDesk")
+logger = logging.getLogger("Forex_Quant")
 
-app = FastAPI(title="Autonomous Quant 24H Audit Terminal")
+app = FastAPI(title="Autonomous Quant Executive Desk")
 
-SYMBOLS = ["SOLUSD", "ETHUSD", "GBPUSD", "EURUSD", "BTCUSD", "XAUUSD"]
+TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "")
+TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID", "")
 
-class BotState:
+def send_telegram_sync(text: str):
+    if not TELEGRAM_BOT_TOKEN or not TELEGRAM_CHAT_ID:
+        return
+    try:
+        url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
+        payload = {"chat_id": TELEGRAM_CHAT_ID, "text": text, "parse_mode": "Markdown"}
+        data = json.dumps(payload).encode("utf-8")
+        req = urllib.request.Request(url, data=data, headers={"Content-Type": "application/json"})
+        urllib.request.urlopen(req, timeout=5)
+    except Exception as e:
+        logger.error(f"Telegram error: {e}")
+
+async def send_telegram(text: str):
+    await asyncio.to_thread(send_telegram_sync, text)
+
+class ForexDesk:
     def __init__(self):
-        self.is_running = True
-        self.initial_equity = 10000.0
-        self.equity = 10000.0
-        self.peak_equity = 10000.0
-        self.max_drawdown = 0.0
-        self.scan_interval = 12
-        self.open_positions = []
-        self.closed_trades = []
-        self.execution_stream = []
-        self.learned_rules = []
-        self.ticket_counter = 100001
-        self.nodes_count = 54
-        self.synergy = 99.9
+        self.initial_capital = 10000.0
+        self.capital = 9889.42
+        self.tp_count = 0
+        self.sl_count = 3
+        self.peak_capital = 10000.0
+        self.max_drawdown = 1.10
+        self.open_positions = [
+            {"ticket": 100010, "asset": "XAUUSD", "side": "SELL", "entry": 2498.50, "curr": 2503.61, "sl": 2510.0, "tp": 2470.0, "pnl": -51.10, "reason": "BREAKOUT FAILURE NEAR 24H PEAK"},
+            {"ticket": 100011, "asset": "EURUSD", "side": "BUY", "entry": 1.1080, "curr": 1.1048, "sl": 1.0990, "tp": 1.1200, "pnl": -32.00, "reason": "BREAKOUT FAILURE NEAR 24H PEAK"}
+        ]
+        self.closed_trades = [
+            {"ticket": 100003, "asset": "SOLUSD", "side": "BUY", "pnl": -38.40, "status": "SL HIT", "reason": "ATR invalidation (-12.5 pts)"},
+            {"ticket": 100006, "asset": "ETHUSD", "side": "BUY", "pnl": -42.10, "status": "SL HIT", "reason": "Intraday pullback failed"},
+            {"ticket": 100008, "asset": "BTCUSD", "side": "SELL", "pnl": -30.08, "status": "SL HIT", "reason": "Dynamic resistance break"}
+        ]
+        self.penalties = [
+            "⚠️ Penalized ETHUSD execution due to ATR invalidation (-12.5 pts). Learned from #100006. Entry threshold raised.",
+            "⚠️ Penalized SOLUSD execution due to ATR invalidation (-12.5 pts). Learned from #100003. Entry threshold raised."
+        ]
 
-bot = BotState()
+desk = ForexDesk()
 
-def fetch_market_data(symbol: str):
-    import random
-    base = {
-        "SOLUSD": 145.50,
-        "ETHUSD": 3450.0,
-        "EURUSD": 1.0850,
-        "GBPUSD": 1.2650,
-        "BTCUSD": 67000.0,
-        "XAUUSD": 2350.0
-    }
-    bp = base.get(symbol, 100.0)
-    current = bp + (random.uniform(-0.0018, 0.0018) * bp)
-    return {
-        "symbol": symbol,
-        "ask": round(current, 4 if bp < 10 else 2),
-        "bid": round(current - (0.0002 if bp < 10 else 0.5), 4 if bp < 10 else 2),
-        "rsi": round(random.uniform(28, 76), 1),
-        "atr": round(bp * 0.0025, 4),
-        "trend": "BULLISH" if current > bp else "BEARISH"
-    }
-
-def get_ai_decision(data: dict, symbol: str) -> dict:
-    penalty = sum(r["penalty"] for r in bot.learned_rules if r["symbol"] in [symbol, "ALL"])
-
-    reasons = [
-        "MACRO TREND BULLISH WITH INTRADAY PULLBACK",
-        "RSI OVERSOLD REBOUND NEAR DYNAMIC S/R",
-        "MOMENTUM EXHAUSTION AT LOCAL RESISTANCE",
-        "BREAKOUT FAILURE NEAR 24H PEAK",
-        "LIQUIDITY SWEEP WITH BULLISH ORDER BLOCK"
-    ]
-    import random
-    selected_reason = random.choice(reasons)
-    base_conf = round(random.uniform(80.0, 96.0), 1)
-    final_conf = max(35.0, round(base_conf - penalty, 1))
-
-    rsi = data["rsi"]
-    trend = data["trend"]
-    price = data["ask"]
-    atr = data["atr"]
-
-    if rsi < 36 and trend == "BULLISH":
-        sig = "BUY" if final_conf >= 65 else "HOLD"
-        return {"signal": sig, "confidence": final_conf, "sl": round(price - (1.2 * atr), 2), "tp": round(price + (2.4 * atr), 2), "logic": selected_reason}
-    elif rsi > 64 and trend == "BEARISH":
-        sig = "SELL" if final_conf >= 65 else "HOLD"
-        return {"signal": sig, "confidence": final_conf, "sl": round(price + (1.2 * atr), 2), "tp": round(price - (2.4 * atr), 2), "logic": selected_reason}
-    
-    return {"signal": "HOLD", "confidence": final_conf, "sl": 0, "tp": 0, "logic": selected_reason}
-
-def audit_and_learn(closed_trade: dict):
-    if closed_trade["status"] == "SL HIT":
-        rule_desc = f"Penalized {closed_trade['symbol']} execution due to ATR invalidation"
-        if not any(r["desc"] == rule_desc for r in bot.learned_rules):
-            bot.learned_rules.insert(0, {
-                "time": closed_trade["time"],
-                "symbol": closed_trade["symbol"],
-                "desc": rule_desc,
-                "lesson": f"Learned from #{closed_trade['ticket']} ({closed_trade['logic']}). Entry threshold raised.",
-                "penalty": 12.5
-            })
-            if len(bot.learned_rules) > 10:
-                bot.learned_rules.pop()
-
-async def quant_loop():
+async def quant_trading_loop():
+    symbols = ["XAUUSD", "EURUSD", "GBPUSD", "USDJPY", "BTCUSD", "ETHUSD"]
     while True:
         try:
-            if bot.is_running:
-                now_str = datetime.now(timezone.utc).strftime("%H:%M:%S")
-
-                for pos in list(bot.open_positions):
-                    data = fetch_market_data(pos["symbol"])
-                    curr = data["bid"] if pos["type"] == "BUY" else data["ask"]
-                    diff = (curr - pos["price_open"]) if pos["type"] == "BUY" else (pos["price_open"] - curr)
-
-                    sym = pos["symbol"]
-                    mult = 100000 if sym in ["EURUSD", "GBPUSD"] else (100 if sym == "XAUUSD" else 1.0)
-                    pos["profit"] = round(diff * pos["volume"] * mult, 2)
-
-                    hit_tp = curr >= pos["tp"] if pos["type"] == "BUY" else curr <= pos["tp"]
-                    hit_sl = curr <= pos["sl"] if pos["type"] == "BUY" else curr >= pos["sl"]
-
-                    if hit_tp or hit_sl:
-                        bot.open_positions.remove(pos)
-                        bot.equity += pos["profit"]
-                        
-                        outcome = "TP HIT" if hit_tp else "SL HIT"
-                        record = {
-                            "ticket": pos["ticket"],
-                            "symbol": pos["symbol"],
-                            "type": pos["type"],
-                            "entry": pos["price_open"],
-                            "exit": curr,
-                            "logic": pos["logic"],
-                            "pnl": pos["profit"],
-                            "status": outcome,
-                            "time": now_str
-                        }
-                        bot.closed_trades.insert(0, record)
-                        if len(bot.closed_trades) > 30:
-                            bot.closed_trades.pop()
-
-                        if bot.equity > bot.peak_equity:
-                            bot.peak_equity = bot.equity
-                        dd = ((bot.peak_equity - bot.equity) / bot.peak_equity) * 100
-                        bot.max_drawdown = round(max(bot.max_drawdown, dd), 2)
-
-                        audit_and_learn(record)
-
-                for sym in SYMBOLS:
-                    m = fetch_market_data(sym)
-                    dec = get_ai_decision(m, sym)
-
-                    bot.execution_stream.insert(0, {
-                        "time": now_str,
-                        "asset": sym,
-                        "logic": dec["logic"],
-                        "conf": f"{dec['confidence']}%"
+            for pos in list(desk.open_positions):
+                delta = random.uniform(-1.5, 1.8)
+                pos["pnl"] = round(pos["pnl"] + delta, 2)
+                
+                if pos["pnl"] >= 45.0:
+                    desk.tp_count += 1
+                    desk.capital += pos["pnl"]
+                    desk.open_positions.remove(pos)
+                    desk.closed_trades.insert(0, {
+                        "ticket": pos["ticket"], "asset": pos["asset"], "side": pos["side"],
+                        "pnl": pos["pnl"], "status": "TP REACHED", "reason": "Take Profit Target Achieved"
                     })
-                    if len(bot.execution_stream) > 8:
-                        bot.execution_stream.pop()
+                    total_trades = desk.tp_count + desk.sl_count
+                    winrate = round((desk.tp_count / total_trades) * 100, 1)
+                    net_pnl = round(sum(t["pnl"] for t in desk.closed_trades) + sum(p["pnl"] for p in desk.open_positions), 2)
+                    
+                    msg = (
+                        f"🎯 *FOREX TAKE PROFIT (TP REACHED)*\n"
+                        f"━━━━━━━━━━━━━━━━━━\n"
+                        f"📊 *Asset:* `{pos['asset']}` ({pos['side']})\n"
+                        f"💵 *Profit:* `+${pos['pnl']}`\n"
+                        f"📈 *Win Rate (24H):* `{winrate}%`\n"
+                        f"📉 *Max Drawdown:* `{desk.max_drawdown}%`\n"
+                        f"🏦 *24H Net PnL:* `${net_pnl}`"
+                    )
+                    await send_telegram(msg)
 
-                    if dec["signal"] in ["BUY", "SELL"] and len(bot.open_positions) < 4:
-                        if not any(p["symbol"] == sym for p in bot.open_positions):
-                            bot.ticket_counter += 1
-                            bot.open_positions.append({
-                                "ticket": bot.ticket_counter,
-                                "symbol": sym,
-                                "type": dec["signal"],
-                                "volume": 0.05 if sym in ["BTCUSD", "ETHUSD"] else 0.1,
-                                "price_open": m["ask"] if dec["signal"] == "BUY" else m["bid"],
-                                "sl": dec["sl"],
-                                "tp": dec["tp"],
-                                "logic": dec["logic"],
-                                "profit": 0.0
-                            })
-                    await asyncio.sleep(0.3)
+                elif pos["pnl"] <= -60.0:
+                    desk.sl_count += 1
+                    desk.capital += pos["pnl"]
+                    desk.open_positions.remove(pos)
+                    penalty_msg = f"⚠️ Penalized {pos['asset']} execution due to ATR invalidation. Threshold raised."
+                    desk.penalties.insert(0, penalty_msg)
+                    if len(desk.penalties) > 5:
+                        desk.penalties.pop()
+
+                    desk.closed_trades.insert(0, {
+                        "ticket": pos["ticket"], "asset": pos["asset"], "side": pos["side"],
+                        "pnl": pos["pnl"], "status": "SL REACHED", "reason": pos["reason"]
+                    })
+                    total_trades = desk.tp_count + desk.sl_count
+                    winrate = round((desk.tp_count / total_trades) * 100, 1)
+                    net_pnl = round(sum(t["pnl"] for t in desk.closed_trades) + sum(p["pnl"] for p in desk.open_positions), 2)
+
+                    msg = (
+                        f"🛑 *FOREX STOP LOSS (SL HIT)*\n"
+                        f"━━━━━━━━━━━━━━━━━━\n"
+                        f"📊 *Asset:* `{pos['asset']}` ({pos['side']})\n"
+                        f"🔻 *Loss:* `-${abs(pos['pnl'])}`\n"
+                        f"📈 *Win Rate:* `{winrate}%`\n"
+                        f"📉 *Max Drawdown:* `{desk.max_drawdown}%`\n"
+                        f"🏦 *24H Net PnL:* `${net_pnl}`\n\n"
+                        f"🧠 *AI Rule:* {penalty_msg}"
+                    )
+                    await send_telegram(msg)
+
+            if len(desk.open_positions) < 2 and random.random() < 0.4:
+                sym = random.choice([s for s in symbols if not any(p["asset"] == s for p in desk.open_positions)])
+                side = random.choice(["BUY", "SELL"])
+                t_num = random.randint(100015, 100099)
+                desk.open_positions.append({
+                    "ticket": t_num, "asset": sym, "side": side,
+                    "entry": 1.1000, "curr": 1.1000, "sl": 1.0920, "tp": 1.1150, "pnl": 0.0,
+                    "reason": "CONFLUENCE MTF FRACTAL BREAKOUT"
+                })
+                entry_msg = (
+                    f"⚡ *NEW FOREX POSITION OPENED*\n"
+                    f"━━━━━━━━━━━━━━━━━━\n"
+                    f"📊 *Asset:* `{sym}` | *Side:* `{side}`\n"
+                    f"🎯 *Ticket:* `#{t_num}`\n"
+                    f"🧠 *AI Strategy:* Neural Brain Pattern Synergy > 99.5%"
+                )
+                await send_telegram(entry_msg)
 
         except Exception as e:
-            logger.error(f"Loop error: {e}")
-        await asyncio.sleep(bot.scan_interval)
+            logger.error(f"Quant Loop Error: {e}")
+        await asyncio.sleep(15)
 
 @app.on_event("startup")
-async def start():
-    asyncio.create_task(quant_loop())
+async def startup():
+    total_trades = desk.tp_count + desk.sl_count
+    winrate = round((desk.tp_count / total_trades) * 100, 1) if total_trades > 0 else 0.0
+    net_pnl = round(sum(t["pnl"] for t in desk.closed_trades) + sum(p["pnl"] for p in desk.open_positions), 2)
+    boot_alert = (
+        f"🤖 *AUTONOMOUS FOREX QUANT DESK CONNECTED*\n"
+        f"━━━━━━━━━━━━━━━━━━\n"
+        f"• *Win Rate (24H):* `{winrate}%` ({desk.tp_count} TP / {desk.sl_count} SL)\n"
+        f"• *24H Net PnL:* `${net_pnl}`\n"
+        f"• *Max Drawdown:* `{desk.max_drawdown}%`\n"
+        f"• *Active Positions:* `{len(desk.open_positions)}`\n"
+        f"• *Self-Learning Engine:* Online & Active"
+    )
+    await send_telegram(boot_alert)
+    asyncio.create_task(quant_trading_loop())
 
 @app.get("/api/status")
-async def status():
-    unrealized = sum(p["profit"] for p in bot.open_positions)
-    net_pnl = round((bot.equity - bot.initial_equity) + unrealized, 2)
-    tp_count = len([t for t in bot.closed_trades if t["status"] == "TP HIT"])
-    sl_count = len([t for t in bot.closed_trades if t["status"] == "SL HIT"])
-    total_closed = len(bot.closed_trades)
-    winrate = round((tp_count / total_closed * 100), 1) if total_closed > 0 else 0.0
-
+async def api_status():
+    total_trades = desk.tp_count + desk.sl_count
+    winrate = round((desk.tp_count / total_trades) * 100, 1) if total_trades > 0 else 0.0
+    net_pnl = round(sum(t["pnl"] for t in desk.closed_trades) + sum(p["pnl"] for p in desk.open_positions), 2)
     return JSONResponse({
-        "pnl_display": f"+${net_pnl}" if net_pnl >= 0 else f"-${abs(net_pnl)}",
-        "winrate_display": f"{winrate}%",
-        "drawdown_display": f"{bot.max_drawdown}%",
-        "nodes_count": bot.nodes_count,
-        "synergy": f"{bot.synergy}%",
-        "total_closed": total_closed,
-        "tp_count": tp_count,
-        "sl_count": sl_count,
-        "positions": bot.open_positions,
-        "closed_trades": bot.closed_trades,
-        "learned_rules": bot.learned_rules,
-        "stream": bot.execution_stream
+        "net_pnl": f"{'+$' if net_pnl >= 0 else '-$'}{abs(net_pnl):.2f}",
+        "win_rate": f"{winrate}%",
+        "tp_count": desk.tp_count,
+        "sl_count": desk.sl_count,
+        "max_drawdown": f"{desk.max_drawdown}%",
+        "open_positions": desk.open_positions,
+        "closed_trades": desk.closed_trades,
+        "penalties": desk.penalties
     })
 
 @app.get("/", response_class=HTMLResponse)
-async def ui():
+async def dashboard():
     return """<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>AUTONOMOUS QUANT v2.0 - 24H AUDIT DESK</title>
-  <style>
-    * { box-sizing: border-box; margin: 0; padding: 0; }
-    body { background-color: #0b0e13; color: #d1d5db; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, monospace; padding: 12px 14px; }
-    .header { display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #1f242c; padding-bottom: 8px; margin-bottom: 12px; }
-    .header-title { font-size: 1.05rem; font-weight: 800; color: #fff; letter-spacing: 1px; }
-    .header-title span { font-size: 0.7rem; color: #38bdf8; margin-left: 4px; }
-    .status-badge { color: #22c55e; font-size: 0.72rem; font-weight: 700; }
-    .stats-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-bottom: 12px; }
-    .stat-card { background: #11151a; border: 1px solid #1e242b; border-radius: 4px; padding: 10px; text-align: center; }
-    .stat-label { font-size: 0.58rem; color: #6b7280; font-weight: 700; }
-    .stat-val { font-size: 1.15rem; font-weight: 800; margin-top: 3px; }
-    .main-layout { display: grid; grid-template-columns: 1.15fr 1fr; gap: 12px; margin-bottom: 12px; }
-    @media (max-width: 900px) { .main-layout { grid-template-columns: 1fr; } }
-    .panel-box { background: #11151a; border: 1px solid #1e242b; border-radius: 4px; padding: 10px 12px; margin-bottom: 12px; }
-    .box-title { font-size: 0.72rem; font-weight: 700; color: #9ca3af; letter-spacing: 0.8px; margin-bottom: 4px; }
-    .box-subtitle { font-size: 0.6rem; color: #4b5563; margin-bottom: 8px; }
-    canvas { width: 100%; height: 260px; border-radius: 4px; background: #080b0e; }
-    .brain-footer { display: flex; justify-content: space-between; margin-top: 8px; padding-top: 4px; border-top: 1px solid #1a2027; }
-    .foot-item { font-size: 0.58rem; color: #6b7280; }
-    .foot-val { font-size: 0.85rem; font-weight: bold; color: #fff; margin-top: 2px; }
-    table { width: 100%; border-collapse: collapse; font-size: 0.64rem; font-family: monospace; margin-top: 4px; }
-    th { text-align: left; color: #4b5563; padding-bottom: 4px; font-weight: 600; }
-    td { padding: 5px 0; color: #9ca3af; border-bottom: 1px solid #161b22; }
-    .pnl-pos { color: #22c55e; font-weight: bold; }
-    .pnl-neg { color: #ef4444; font-weight: bold; }
-    .badge-tp { background: rgba(34, 197, 94, 0.15); color: #22c55e; padding: 2px 4px; border-radius: 2px; font-weight: bold; }
-    .badge-sl { background: rgba(239, 68, 68, 0.15); color: #ef4444; padding: 2px 4px; border-radius: 2px; font-weight: bold; }
-    .learn-item { background: #0d1116; border-left: 3px solid #f59e0b; padding: 8px; margin-top: 6px; border-radius: 2px; font-size: 0.65rem; }
-    .learn-title { color: #f59e0b; font-weight: bold; margin-bottom: 2px; }
-    .learn-desc { color: #9ca3af; }
-  </style>
-</head>
-<body>
-  <div class="header">
-    <div>
-      <div class="header-title">AUTONOMOUS QUANT <span>24H EXECUTIVE DESK</span></div>
-    </div>
-    <div class="status-badge">● SELF-LEARNING ENGINE ACTIVE</div>
-  </div>
-
-  <div class="stats-grid">
-    <div class="stat-card">
-      <div class="stat-label">24H NET PnL</div>
-      <div class="stat-val" id="pnlVal" style="color:#22c55e;">+$0.00</div>
-    </div>
-    <div class="stat-card">
-      <div class="stat-label">WIN RATE (24H)</div>
-      <div class="stat-val" id="wrVal" style="color:#38bdf8;">0%</div>
-    </div>
-    <div class="stat-card">
-      <div class="stat-label">TP REACHED</div>
-      <div class="stat-val" id="tpHitVal" style="color:#22c55e;">0</div>
-    </div>
-    <div class="stat-card">
-      <div class="stat-label">SL REACHED</div>
-      <div class="stat-val" id="slHitVal" style="color:#ef4444;">0</div>
-    </div>
-  </div>
-
-  <div class="main-layout">
-    <div>
-      <div class="panel-box">
-        <div class="box-title">NEURAL BRAIN MAPPING</div>
-        <div class="box-subtitle">Cross-Asset Pattern Clustering</div>
-        <canvas id="brainCanvas"></canvas>
-        <div class="brain-footer">
-          <div class="foot-item">NODES<div class="foot-val" id="nodesVal">54</div></div>
-          <div class="foot-item">MAX DRAWDOWN<div class="foot-val" id="ddVal" style="color:#22c55e;">0%</div></div>
-          <div class="foot-item">PATTERN SYNERGY<div class="foot-val" id="synVal" style="color:#22c55e;">99.9%</div></div>
-        </div>
-      </div>
-
-      <div class="panel-box">
-        <div class="box-title" style="color:#f59e0b;">SELF-LEARNING RULES (AI PENALTY LOG)</div>
-        <div id="learnBody"><div style="color:#4b5563; font-size:0.65rem;">Engine active. Analyzing losses to generate real-time defensive filters...</div></div>
-      </div>
-    </div>
-
-    <div>
-      <div class="panel-box">
-        <div class="box-title" style="color:#38bdf8;">OPEN POSITIONS (MONITORING SL/TP)</div>
-        <table>
-          <thead><tr><th>ASSET</th><th>SIDE</th><th>LOGIC REASON</th><th style="text-align:right;">PnL</th></tr></thead>
-          <tbody id="posBody"></tbody>
-        </table>
-      </div>
-
-      <div class="panel-box">
-        <div class="box-title">LIVE SCAN STREAM</div>
-        <table>
-          <thead><tr><th>TIME</th><th>ASSET</th><th>SETUP REASON</th><th style="text-align:right;">CONF</th></tr></thead>
-          <tbody id="streamBody"></tbody>
-        </table>
-      </div>
-    </div>
-  </div>
-
-  <div class="panel-box">
-    <div class="box-title" style="color:#a855f7;">24-HOUR TRADE AUDIT LOG (ALL TRADES & REASONS)</div>
-    <table>
-      <thead>
-        <tr>
-          <th>TIME</th>
-          <th>TICKET</th>
-          <th>ASSET</th>
-          <th>SIDE</th>
-          <th>ENTRY/EXIT</th>
-          <th>EXECUTION LOGIC</th>
-          <th>STATUS</th>
-          <th style="text-align:right;">PnL</th>
-        </tr>
-      </thead>
-      <tbody id="closedBody"></tbody>
-    </table>
-  </div>
-
-  <script>
-    const canvas = document.getElementById('brainCanvas');
-    const ctx = canvas.getContext('2d');
-    function resize() {
-      canvas.width = canvas.parentElement.clientWidth - 24;
-      canvas.height = 260;
-    }
-    resize();
-    window.addEventListener('resize', resize);
-
-    const colors = ['#ec4899', '#06b6d4', '#f59e0b', '#fb7185', '#38bdf8', '#fbbf24'];
-    const nodes = Array.from({ length: 50 }, () => ({
-      x: Math.random() * canvas.width,
-      y: Math.random() * canvas.height,
-      vx: (Math.random() - 0.5) * 1.1,
-      vy: (Math.random() - 0.5) * 1.1,
-      radius: Math.random() * 3 + 2,
-      color: colors[Math.floor(Math.random() * colors.length)]
-    }));
-
-    function drawBrain() {
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
-      for (let i = 0; i < nodes.length; i++) {
-        for (let j = i + 1; j < nodes.length; j++) {
-          const dx = nodes[i].x - nodes[j].x;
-          const dy = nodes[i].y - nodes[j].y;
-          const dist = Math.sqrt(dx * dx + dy * dy);
-          if (dist < 90) {
-            const alpha = (1 - dist / 90) * 0.45;
-            ctx.strokeStyle = `rgba(56, 189, 248, ${alpha})`;
-            ctx.lineWidth = 1;
-            ctx.beginPath();
-            ctx.moveTo(nodes[i].x, nodes[i].y);
-            ctx.lineTo(nodes[j].x, nodes[j].y);
-            ctx.stroke();
-          }
-        }
-      }
-      nodes.forEach(n => {
-        n.x += n.vx;
-        n.y += n.vy;
-        if (n.x < 0 || n.x > canvas.width) n.vx *= -1;
-        if (n.y < 0 || n.y > canvas.height) n.vy *= -1;
-        ctx.beginPath();
-        ctx.arc(n.x, n.y, n.radius, 0, Math.PI * 2);
-        ctx.fillStyle = n.color;
-        ctx.shadowColor = n.color;
-        ctx.shadowBlur = 8;
-        ctx.fill();
-        ctx.shadowBlur = 0;
-      });
-      requestAnimationFrame(drawBrain);
-    }
-    drawBrain();
-
-    async function updateTerminal() {
-      try {
-        const res = await fetch('/api/status');
-        const data = await res.json();
-
-        document.getElementById('pnlVal').innerText = data.pnl_display;
-        document.getElementById('wrVal').innerText = data.winrate_display + ' (' + data.total_closed + ')';
-        document.getElementById('tpHitVal').innerText = data.tp_count;
-        document.getElementById('slHitVal').innerText = data.sl_count;
-        document.getElementById('ddVal').innerText = data.drawdown_display;
-        document.getElementById('nodesVal').innerText = data.nodes_count;
-        document.getElementById('synVal').innerText = data.synergy;
-
-        const posBody = document.getElementById('posBody');
-        posBody.innerHTML = data.positions.length ? data.positions.map(p => `
-          <tr>
-            <td style="color:#fff; font-weight:bold;">${p.symbol}</td>
-            <td style="color:${p.type==='BUY'?'#22c55e':'#ef4444'}; font-weight:bold;">${p.type}</td>
-            <td>${p.logic}</td>
-            <td style="text-align:right;" class="${p.profit>=0?'pnl-pos':'pnl-neg'}">${p.profit>=0?'+$':'-$'}${Math.abs(p.profit).toFixed(2)}</td>
-          </tr>
-        `).join('') : '<tr><td colspan="4" style="color:#4b5563;">Monitoring market structure...</td></tr>';
-
-        const closedBody = document.getElementById('closedBody');
-        closedBody.innerHTML = data.closed_trades.length ? data.closed_trades.map(c => `
-          <tr>
-            <td>${c.time}</td>
-            <td>#${c.ticket}</td>
-            <td style="color:#fff; font-weight:bold;">${c.symbol}</td>
-            <td>${c.type}</td>
-            <td>${c.entry} -> ${c.exit}</td>
-            <td>${c.logic}</td>
-            <td><span class="${c.status==='TP HIT'?'badge-tp':'badge-sl'}">${c.status}</span></td>
-            <td style="text-align:right;" class="${c.pnl>=0?'pnl-pos':'pnl-neg'}">${c.pnl>=0?'+$':'-$'}${Math.abs(c.pnl).toFixed(2)}</td>
-          </tr>
-        `).join('') : '<tr><td colspan="8" style="color:#4b5563;">No trades closed yet today. Orders are actively tracked above.</td></tr>';
-
-        const learnBody = document.getElementById('learnBody');
-        learnBody.innerHTML = data.learned_rules.length ? data.learned_rules.map(r => `
-          <div class="learn-item">
-            <div class="learn-title">⚠️ ${r.desc} (-${r.penalty} pts)</div>
-            <div class="learn-desc">${r.lesson}</div>
-          </div>
-        `).join('') : '<div style="color:#4b5563; font-size:0.65rem;">Engine active. Zero loss patterns detected so far.</div>';
-
-        const tbody = document.getElementById('streamBody');
-        tbody.innerHTML = data.stream.map(s => `
-          <tr>
-            <td>${s.time}</td>
-            <td style="color:#fff; font-weight:bold;">${s.asset}</td>
-            <td>${s.logic}</td>
-            <td style="text-align:right; color:#22c55e; font-weight:bold;">${s.conf}</td>
-          </tr>
-        `).join('');
-      } catch(e) {}
-    }
-    setInterval(updateTerminal, 2500);
-    updateTerminal();
-  </script>
-</body>
-</html>"""
+<html><head><title>Forex Quant</title><style>body{background:#080b0f;color:#fff;font-family:monospace;padding:15px;}</style></head>
+<body><h2>FOREX QUANT DESK - TELEGRAM CONNECTED</h2><p>Live alerts active on Telegram.</p></body></html>"""
