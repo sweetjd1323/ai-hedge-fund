@@ -202,261 +202,241 @@ async def status():
 
 @app.get("/", response_class=HTMLResponse)
 async def ui():
-    return """
-    <!DOCTYPE html>
-    <html lang="en">
-    <head>
-      <meta charset="UTF-8">
-      <meta name="viewport" content="width=device-width, initial-scale=1.0">
-      <title>AUTONOMOUS QUANT v2.0 - 24H AUDIT DESK</title>
-      <style>
-        * { box-sizing: border-box; margin: 0; padding: 0; }
-        body {
-          background-color: #0b0e13;
-          color: #d1d5db;
-          font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, monospace;
-          padding: 12px 14px;
-        }
-        .header {
-          display: flex;
-          justify-content: space-between;
-          align-items: center;
-          border-bottom: 1px solid #1f242c;
-          padding-bottom: 8px;
-          margin-bottom: 12px;
-        }
-        .header-title { font-size: 1.05rem; font-weight: 800; color: #fff; letter-spacing: 1px; }
-        .header-title span { font-size: 0.7rem; color: #38bdf8; margin-left: 4px; }
-        .status-badge { color: #22c55e; font-size: 0.72rem; font-weight: 700; }
-        
-        .stats-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-bottom: 12px; }
-        .stat-card { background: #11151a; border: 1px solid #1e242b; border-radius: 4px; padding: 10px; text-align: center; }
-        .stat-label { font-size: 0.58rem; color: #6b7280; font-weight: 700; }
-        .stat-val { font-size: 1.15rem; font-weight: 800; margin-top: 3px; }
-        
-        .main-layout { display: grid; grid-template-columns: 1.15fr 1fr; gap: 12px; margin-bottom: 12px; }
-        @media (max-width: 900px) { .main-layout { grid-template-columns: 1fr; } }
-        
-        .panel-box {
-          background: #11151a;
-          border: 1px solid #1e242b;
-          border-radius: 4px;
-          padding: 10px 12px;
-          margin-bottom: 12px;
-        }
-        .box-title { font-size: 0.72rem; font-weight: 700; color: #9ca3af; letter-spacing: 0.8px; margin-bottom: 4px; }
-        .box-subtitle { font-size: 0.6rem; color: #4b5563; margin-bottom: 8px; }
-        canvas { width: 100%; height: 260px; border-radius: 4px; background: #080b0e; }
-        
-        .brain-footer { display: flex; justify-content: space-between; margin-top: 8px; padding-top: 4px; border-top: 1px solid #1a2027; }
-        .foot-item { font-size: 0.58rem; color: #6b7280; }
-        .foot-val { font-size: 0.85rem; font-weight: bold; color: #fff; margin-top: 2px; }
-        
-        table { width: 100%; border-collapse: collapse; font-size: 0.64rem; font-family: monospace; margin-top: 4px; }
-        th { text-align: left; color: #4b5563; padding-bottom: 4px; font-weight: 600; }
-        td { padding: 5px 0; color: #9ca3af; border-bottom: 1px solid #161b22; }
-        
-        .pnl-pos { color: #22c55e; font-weight: bold; }
-        .pnl-neg { color: #ef4444; font-weight: bold; }
-        .badge-tp { background: rgba(34, 197, 94, 0.15); color: #22c55e; padding: 2px 4px; border-radius: 2px; font-weight: bold; }
-        .badge-sl { background: rgba(239, 68, 68, 0.15); color: #ef4444; padding: 2px 4px; border-radius: 2px; font-weight: bold; }
-        
-        .learn-item {
-          background: #0d1116;
-          border-left: 3px solid #f59e0b;
-          padding: 8px;
-          margin-top: 6px;
-          border-radius: 2px;
-          font-size: 0.65rem;
-        }
-        .learn-title { color: #f59e0b; font-weight: bold; margin-bottom: 2px; }
-        .learn-desc { color: #9ca3af; }
-      </style>
-    </head>
-    <body>
-      <div class="header">
-        <div>
-          <div class="header-title">AUTONOMOUS QUANT <span>24H EXECUTIVE DESK</span></div>
-        </div>
-        <div class="status-badge">● SELF-LEARNING ENGINE ACTIVE</div>
-      </div>
+    return """<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AUTONOMOUS QUANT v2.0 - 24H AUDIT DESK</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { background-color: #0b0e13; color: #d1d5db; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, monospace; padding: 12px 14px; }
+    .header { display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #1f242c; padding-bottom: 8px; margin-bottom: 12px; }
+    .header-title { font-size: 1.05rem; font-weight: 800; color: #fff; letter-spacing: 1px; }
+    .header-title span { font-size: 0.7rem; color: #38bdf8; margin-left: 4px; }
+    .status-badge { color: #22c55e; font-size: 0.72rem; font-weight: 700; }
+    .stats-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-bottom: 12px; }
+    .stat-card { background: #11151a; border: 1px solid #1e242b; border-radius: 4px; padding: 10px; text-align: center; }
+    .stat-label { font-size: 0.58rem; color: #6b7280; font-weight: 700; }
+    .stat-val { font-size: 1.15rem; font-weight: 800; margin-top: 3px; }
+    .main-layout { display: grid; grid-template-columns: 1.15fr 1fr; gap: 12px; margin-bottom: 12px; }
+    @media (max-width: 900px) { .main-layout { grid-template-columns: 1fr; } }
+    .panel-box { background: #11151a; border: 1px solid #1e242b; border-radius: 4px; padding: 10px 12px; margin-bottom: 12px; }
+    .box-title { font-size: 0.72rem; font-weight: 700; color: #9ca3af; letter-spacing: 0.8px; margin-bottom: 4px; }
+    .box-subtitle { font-size: 0.6rem; color: #4b5563; margin-bottom: 8px; }
+    canvas { width: 100%; height: 260px; border-radius: 4px; background: #080b0e; }
+    .brain-footer { display: flex; justify-content: space-between; margin-top: 8px; padding-top: 4px; border-top: 1px solid #1a2027; }
+    .foot-item { font-size: 0.58rem; color: #6b7280; }
+    .foot-val { font-size: 0.85rem; font-weight: bold; color: #fff; margin-top: 2px; }
+    table { width: 100%; border-collapse: collapse; font-size: 0.64rem; font-family: monospace; margin-top: 4px; }
+    th { text-align: left; color: #4b5563; padding-bottom: 4px; font-weight: 600; }
+    td { padding: 5px 0; color: #9ca3af; border-bottom: 1px solid #161b22; }
+    .pnl-pos { color: #22c55e; font-weight: bold; }
+    .pnl-neg { color: #ef4444; font-weight: bold; }
+    .badge-tp { background: rgba(34, 197, 94, 0.15); color: #22c55e; padding: 2px 4px; border-radius: 2px; font-weight: bold; }
+    .badge-sl { background: rgba(239, 68, 68, 0.15); color: #ef4444; padding: 2px 4px; border-radius: 2px; font-weight: bold; }
+    .learn-item { background: #0d1116; border-left: 3px solid #f59e0b; padding: 8px; margin-top: 6px; border-radius: 2px; font-size: 0.65rem; }
+    .learn-title { color: #f59e0b; font-weight: bold; margin-bottom: 2px; }
+    .learn-desc { color: #9ca3af; }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <div>
+      <div class="header-title">AUTONOMOUS QUANT <span>24H EXECUTIVE DESK</span></div>
+    </div>
+    <div class="status-badge">● SELF-LEARNING ENGINE ACTIVE</div>
+  </div>
 
-      <div class="stats-grid">
-        <div class="stat-card">
-          <div class="stat-label">24H NET PnL</div>
-          <div class="stat-val" id="pnlVal" style="color:#22c55e;">+$0.00</div>
-        </div>
-        <div class="stat-card">
-          <div class="stat-label">WIN RATE (24H)</div>
-          <div class="stat-val" id="wrVal" style="color:#38bdf8;">0%</div>
-        </div>
-        <div class="stat-card">
-          <div class="stat-label">TP REACHED</div>
-          <div class="stat-val" id="tpHitVal" style="color:#22c55e;">0</div>
-        </div>
-        <div class="stat-card">
-          <div class="stat-label">SL REACHED</div>
-          <div class="stat-val" id="slHitVal" style="color:#ef4444;">0</div>
-        </div>
-      </div>
+  <div class="stats-grid">
+    <div class="stat-card">
+      <div class="stat-label">24H NET PnL</div>
+      <div class="stat-val" id="pnlVal" style="color:#22c55e;">+$0.00</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">WIN RATE (24H)</div>
+      <div class="stat-val" id="wrVal" style="color:#38bdf8;">0%</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">TP REACHED</div>
+      <div class="stat-val" id="tpHitVal" style="color:#22c55e;">0</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">SL REACHED</div>
+      <div class="stat-val" id="slHitVal" style="color:#ef4444;">0</div>
+    </div>
+  </div>
 
-      <div class="main-layout">
-        <div>
-          <div class="panel-box">
-            <div class="box-title">NEURAL BRAIN MAPPING</div>
-            <div class="box-subtitle">Cross-Asset Pattern Clustering</div>
-            <canvas id="brainCanvas"></canvas>
-            <div class="brain-footer">
-              <div class="foot-item">NODES<div class="foot-val" id="nodesVal">54</div></div>
-              <div class="foot-item">MAX DRAWDOWN<div class="foot-val" id="ddVal" style="color:#22c55e;">0%</div></div>
-              <div class="foot-item">PATTERN SYNERGY<div class="foot-val" id="synVal" style="color:#22c55e;">99.9%</div></div>
-            </div>
-          </div>
-
-          <div class="panel-box">
-            <div class="box-title" style="color:#f59e0b;">SELF-LEARNING RULES (AI PENALTY LOG)</div>
-            <div id="learnBody"><div style="color:#4b5563; font-size:0.65rem;">Engine active. Analyzing losses to generate real-time defensive filters...</div></div>
-          </div>
-        </div>
-
-        <div>
-          <div class="panel-box">
-            <div class="box-title" style="color:#38bdf8;">OPEN POSITIONS (MONITORING SL/TP)</div>
-            <table>
-              <thead><tr><th>ASSET</th><th>SIDE</th><th>LOGIC REASON</th><th style="text-align:right;">PnL</th></tr></thead>
-              <tbody id="posBody"></tbody>
-            </table>
-          </div>
-
-          <div class="panel-box">
-            <div class="box-title">LIVE SCAN STREAM</div>
-            <table>
-              <thead><tr><th>TIME</th><th>ASSET</th><th>SETUP REASON</th><th style="text-align:right;">CONF</th></tr></thead>
-              <tbody id="streamBody"></tbody>
-            </table>
-          </div>
+  <div class="main-layout">
+    <div>
+      <div class="panel-box">
+        <div class="box-title">NEURAL BRAIN MAPPING</div>
+        <div class="box-subtitle">Cross-Asset Pattern Clustering</div>
+        <canvas id="brainCanvas"></canvas>
+        <div class="brain-footer">
+          <div class="foot-item">NODES<div class="foot-val" id="nodesVal">54</div></div>
+          <div class="foot-item">MAX DRAWDOWN<div class="foot-val" id="ddVal" style="color:#22c55e;">0%</div></div>
+          <div class="foot-item">PATTERN SYNERGY<div class="foot-val" id="synVal" style="color:#22c55e;">99.9%</div></div>
         </div>
       </div>
 
       <div class="panel-box">
-        <div class="box-title" style="color:#a855f7;">24-HOUR TRADE AUDIT LOG (ALL TRADES & REASONS)</div>
+        <div class="box-title" style="color:#f59e0b;">SELF-LEARNING RULES (AI PENALTY LOG)</div>
+        <div id="learnBody"><div style="color:#4b5563; font-size:0.65rem;">Engine active. Analyzing losses to generate real-time defensive filters...</div></div>
+      </div>
+    </div>
+
+    <div>
+      <div class="panel-box">
+        <div class="box-title" style="color:#38bdf8;">OPEN POSITIONS (MONITORING SL/TP)</div>
         <table>
-          <thead>
-            <tr>
-              <th>TIME</th>
-              <th>TICKET</th>
-              <th>ASSET</th>
-              <th>SIDE</th>
-              <th>ENTRY/EXIT</th>
-              <th>EXECUTION LOGIC</th>
-              <th>STATUS</th>
-              <th style="text-align:right;">PnL</th>
-            </tr>
-          </thead>
-          <tbody id="closedBody"></tbody>
+          <thead><tr><th>ASSET</th><th>SIDE</th><th>LOGIC REASON</th><th style="text-align:right;">PnL</th></tr></thead>
+          <tbody id="posBody"></tbody>
         </table>
       </div>
 
-      <script>
-        const canvas = document.getElementById('brainCanvas');
-        const ctx = canvas.getContext('2d');
-        function resize() {
-          canvas.width = canvas.parentElement.clientWidth - 24;
-          canvas.height = 260;
-        }
-        resize();
-        window.addEventListener('resize', resize);
+      <div class="panel-box">
+        <div class="box-title">LIVE SCAN STREAM</div>
+        <table>
+          <thead><tr><th>TIME</th><th>ASSET</th><th>SETUP REASON</th><th style="text-align:right;">CONF</th></tr></thead>
+          <tbody id="streamBody"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
 
-        const colors = ['#ec4899', '#06b6d4', '#f59e0b', '#fb7185', '#38bdf8', '#fbbf24'];
-        const nodes = Array.from({ length: 50 }, () => ({
-          x: Math.random() * canvas.width,
-          y: Math.random() * canvas.height,
-          vx: (Math.random() - 0.5) * 1.1,
-          vy: (Math.random() - 0.5) * 1.1,
-          radius: Math.random() * 3 + 2,
-          color: colors[Math.floor(Math.random() * colors.length)]
-        }));
+  <div class="panel-box">
+    <div class="box-title" style="color:#a855f7;">24-HOUR TRADE AUDIT LOG (ALL TRADES & REASONS)</div>
+    <table>
+      <thead>
+        <tr>
+          <th>TIME</th>
+          <th>TICKET</th>
+          <th>ASSET</th>
+          <th>SIDE</th>
+          <th>ENTRY/EXIT</th>
+          <th>EXECUTION LOGIC</th>
+          <th>STATUS</th>
+          <th style="text-align:right;">PnL</th>
+        </tr>
+      </thead>
+      <tbody id="closedBody"></tbody>
+    </table>
+  </div>
 
-        function drawBrain() {
-          ctx.clearRect(0, 0, canvas.width, canvas.height);
-          for (let i = 0; i < nodes.length; i++) {
-            for (let j = i + 1; j < nodes.length; j++) {
-              const dx = nodes[i].x - nodes[j].x;
-              const dy = nodes[i].y - nodes[j].y;
-              const dist = Math.sqrt(dx * dx + dy * dy);
-              if (dist < 90) {
-                const alpha = (1 - dist / 90) * 0.45;
-                ctx.strokeStyle = `rgba(56, 189, 248, ${alpha})`;
-                ctx.lineWidth = 1;
-                ctx.beginPath();
-                ctx.moveTo(nodes[i].x, nodes[i].y);
-                ctx.lineTo(nodes[j].x, nodes[j].y);
-                ctx.stroke();
-              }
-            }
-          }
-          nodes.forEach(n => {
-            n.x += n.vx;
-            n.y += n.vy;
-            if (n.x < 0 || n.x > canvas.width) n.vx *= -1;
-            if (n.y < 0 || n.y > canvas.height) n.vy *= -1;
+  <script>
+    const canvas = document.getElementById('brainCanvas');
+    const ctx = canvas.getContext('2d');
+    function resize() {
+      canvas.width = canvas.parentElement.clientWidth - 24;
+      canvas.height = 260;
+    }
+    resize();
+    window.addEventListener('resize', resize);
+
+    const colors = ['#ec4899', '#06b6d4', '#f59e0b', '#fb7185', '#38bdf8', '#fbbf24'];
+    const nodes = Array.from({ length: 50 }, () => ({
+      x: Math.random() * canvas.width,
+      y: Math.random() * canvas.height,
+      vx: (Math.random() - 0.5) * 1.1,
+      vy: (Math.random() - 0.5) * 1.1,
+      radius: Math.random() * 3 + 2,
+      color: colors[Math.floor(Math.random() * colors.length)]
+    }));
+
+    function drawBrain() {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      for (let i = 0; i < nodes.length; i++) {
+        for (let j = i + 1; j < nodes.length; j++) {
+          const dx = nodes[i].x - nodes[j].x;
+          const dy = nodes[i].y - nodes[j].y;
+          const dist = Math.sqrt(dx * dx + dy * dy);
+          if (dist < 90) {
+            const alpha = (1 - dist / 90) * 0.45;
+            ctx.strokeStyle = `rgba(56, 189, 248, ${alpha})`;
+            ctx.lineWidth = 1;
             ctx.beginPath();
-            ctx.arc(n.x, n.y, n.radius, 0, Math.PI * 2);
-            ctx.fillStyle = n.color;
-            ctx.shadowColor = n.color;
-            ctx.shadowBlur = 8;
-            ctx.fill();
-            ctx.shadowBlur = 0;
-          });
-          requestAnimationFrame(drawBrain);
+            ctx.moveTo(nodes[i].x, nodes[i].y);
+            ctx.lineTo(nodes[j].x, nodes[j].y);
+            ctx.stroke();
+          }
         }
-        drawBrain();
+      }
+      nodes.forEach(n => {
+        n.x += n.vx;
+        n.y += n.vy;
+        if (n.x < 0 || n.x > canvas.width) n.vx *= -1;
+        if (n.y < 0 || n.y > canvas.height) n.vy *= -1;
+        ctx.beginPath();
+        ctx.arc(n.x, n.y, n.radius, 0, Math.PI * 2);
+        ctx.fillStyle = n.color;
+        ctx.shadowColor = n.color;
+        ctx.shadowBlur = 8;
+        ctx.fill();
+        ctx.shadowBlur = 0;
+      });
+      requestAnimationFrame(drawBrain);
+    }
+    drawBrain();
 
-        async function updateTerminal() {
-          try {
-            const res = await fetch('/api/status');
-            const data = await res.json();
+    async function updateTerminal() {
+      try {
+        const res = await fetch('/api/status');
+        const data = await res.json();
 
-            document.getElementById('pnlVal').innerText = data.pnl_display;
-            document.getElementById('wrVal').innerText = data.winrate_display + ' (' + data.total_closed + ')';
-            document.getElementById('tpHitVal').innerText = data.tp_count;
-            document.getElementById('slHitVal').innerText = data.sl_count;
-            document.getElementById('ddVal').innerText = data.drawdown_display;
-            document.getElementById('nodesVal').innerText = data.nodes_count;
-            document.getElementById('synVal').innerText = data.synergy;
+        document.getElementById('pnlVal').innerText = data.pnl_display;
+        document.getElementById('wrVal').innerText = data.winrate_display + ' (' + data.total_closed + ')';
+        document.getElementById('tpHitVal').innerText = data.tp_count;
+        document.getElementById('slHitVal').innerText = data.sl_count;
+        document.getElementById('ddVal').innerText = data.drawdown_display;
+        document.getElementById('nodesVal').innerText = data.nodes_count;
+        document.getElementById('synVal').innerText = data.synergy;
 
-            const posBody = document.getElementById('posBody');
-            posBody.innerHTML = data.positions.length ? data.positions.map(p => `
-              <tr>
-                <td style="color:#fff; font-weight:bold;">${p.symbol}</td>
-                <td style="color:${p.type==='BUY'?'#22c55e':'#ef4444'}; font-weight:bold;">${p.type}</td>
-                <td>${p.logic}</td>
-                <td style="text-align:right;" class="${p.profit>=0?'pnl-pos':'pnl-neg'}">${p.profit>=0?'+$':'-$'}${Math.abs(p.profit).toFixed(2)}</td>
-              </tr>
-            `).join('') : '<tr><td colspan="4" style="color:#4b5563;">Monitoring market structure...</td></tr>';
+        const posBody = document.getElementById('posBody');
+        posBody.innerHTML = data.positions.length ? data.positions.map(p => `
+          <tr>
+            <td style="color:#fff; font-weight:bold;">${p.symbol}</td>
+            <td style="color:${p.type==='BUY'?'#22c55e':'#ef4444'}; font-weight:bold;">${p.type}</td>
+            <td>${p.logic}</td>
+            <td style="text-align:right;" class="${p.profit>=0?'pnl-pos':'pnl-neg'}">${p.profit>=0?'+$':'-$'}${Math.abs(p.profit).toFixed(2)}</td>
+          </tr>
+        `).join('') : '<tr><td colspan="4" style="color:#4b5563;">Monitoring market structure...</td></tr>';
 
-            const closedBody = document.getElementById('closedBody');
-            closedBody.innerHTML = data.closed_trades.length ? data.closed_trades.map(c => `
-              <tr>
-                <td>${c.time}</td>
-                <td>#${c.ticket}</td>
-                <td style="color:#fff; font-weight:bold;">${c.symbol}</td>
-                <td>${c.type}</td>
-                <td>${c.entry} -> ${c.exit}</td>
-                <td>${c.logic}</td>
-                <td><span class="${c.status==='TP HIT'?'badge-tp':'badge-sl'}">${c.status}</span></td>
-                <td style="text-align:right;" class="${c.pnl>=0?'pnl-pos':'pnl-neg'}">${c.pnl>=0?'+$':'-$'}${Math.abs(c.pnl).toFixed(2)}</td>
-              </tr>
-            `).join('') : '<tr><td colspan="8" style="color:#4b5563;">No trades closed yet today. Orders are actively tracked above.</td></tr>';
+        const closedBody = document.getElementById('closedBody');
+        closedBody.innerHTML = data.closed_trades.length ? data.closed_trades.map(c => `
+          <tr>
+            <td>${c.time}</td>
+            <td>#${c.ticket}</td>
+            <td style="color:#fff; font-weight:bold;">${c.symbol}</td>
+            <td>${c.type}</td>
+            <td>${c.entry} -> ${c.exit}</td>
+            <td>${c.logic}</td>
+            <td><span class="${c.status==='TP HIT'?'badge-tp':'badge-sl'}">${c.status}</span></td>
+            <td style="text-align:right;" class="${c.pnl>=0?'pnl-pos':'pnl-neg'}">${c.pnl>=0?'+$':'-$'}${Math.abs(c.pnl).toFixed(2)}</td>
+          </tr>
+        `).join('') : '<tr><td colspan="8" style="color:#4b5563;">No trades closed yet today. Orders are actively tracked above.</td></tr>';
 
-            const learnBody = document.getElementById('learnBody');
-            learnBody.innerHTML = data.learned_rules.length ? data.learned_rules.map(r => `
-              <div class="learn-item">
-                <div class="learn-title">⚠️ ${r.desc} (-${r.penalty} pts)</div>
-                <div class="learn-desc">${r.lesson}</div>
-              </div>
-            `).join('') : '<div style="color:#4b5563; font-size:0.65rem;">Engine active. Zero loss patterns detected so far.</div>';
+        const learnBody = document.getElementById('learnBody');
+        learnBody.innerHTML = data.learned_rules.length ? data.learned_rules.map(r => `
+          <div class="learn-item">
+            <div class="learn-title">⚠️ ${r.desc} (-${r.penalty} pts)</div>
+            <div class="learn-desc">${r.lesson}</div>
+          </div>
+        `).join('') : '<div style="color:#4b5563; font-size:0.65rem;">Engine active. Zero loss patterns detected so far.</div>';
 
-            const tbody = document.getElementById('streamBody');
-            tbody.innerHTML = data.stream.map(s => `
-         
+        const tbody = document.getElementById('streamBody');
+        tbody.innerHTML = data.stream.map(s => `
+          <tr>
+            <td>${s.time}</td>
+            <td style="color:#fff; font-weight:bold;">${s.asset}</td>
+            <td>${s.logic}</td>
+            <td style="text-align:right; color:#22c55e; font-weight:bold;">${s.conf}</td>
+          </tr>
+        `).join('');
+      } catch(e) {}
+    }
+    setInterval(updateTerminal, 2500);
+    updateTerminal();
+  </script>
+</body>
+</html>"""
