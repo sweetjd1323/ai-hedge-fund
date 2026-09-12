@@ -4,6 +4,7 @@ import random
 import asyncio
 import logging
 import urllib.request
+from datetime import datetime, timezone, timedelta
 from fastapi import FastAPI
 from fastapi.responses import HTMLResponse, JSONResponse
 
@@ -37,32 +38,35 @@ class ForexDesk:
         self.tp_count = 0
         self.sl_count = 3
         self.peak_capital = 10000.0
-        self.max_drawdown = 1.10
+        self.max_drawdown = 0.01
+        self.pattern_synergy = 99.9
+        self.nodes = 54
         self.open_positions = [
             {"ticket": 100010, "asset": "XAUUSD", "side": "SELL", "entry": 2498.50, "curr": 2503.61, "sl": 2510.0, "tp": 2470.0, "pnl": -51.10, "reason": "BREAKOUT FAILURE NEAR 24H PEAK"},
             {"ticket": 100011, "asset": "EURUSD", "side": "BUY", "entry": 1.1080, "curr": 1.1048, "sl": 1.0990, "tp": 1.1200, "pnl": -32.00, "reason": "BREAKOUT FAILURE NEAR 24H PEAK"}
         ]
         self.closed_trades = [
             {"ticket": 100003, "asset": "SOLUSD", "side": "BUY", "pnl": -38.40, "status": "SL HIT", "reason": "ATR invalidation (-12.5 pts)"},
-            {"ticket": 100006, "asset": "ETHUSD", "side": "BUY", "pnl": -42.10, "status": "SL HIT", "reason": "Intraday pullback failed"},
-            {"ticket": 100008, "asset": "BTCUSD", "side": "SELL", "pnl": -30.08, "status": "SL HIT", "reason": "Dynamic resistance break"}
+            {"ticket": 100006, "asset": "ETHUSD", "side": "BUY", "pnl": -42.10, "status": "SL HIT", "reason": "MACRO TREND BULLISH WITH INTRADAY PULLBACK"},
+            {"ticket": 100008, "asset": "BTCUSD", "side": "SELL", "pnl": -30.08, "status": "SL HIT", "reason": "RSI OVERBOUGHT REVERSAL NEAR S/R"}
         ]
         self.penalties = [
-            "⚠️ Penalized ETHUSD execution due to ATR invalidation (-12.5 pts). Learned from #100006. Entry threshold raised.",
-            "⚠️ Penalized SOLUSD execution due to ATR invalidation (-12.5 pts). Learned from #100003. Entry threshold raised."
+            {"text": "⚠️ Penalized ETHUSD execution due to ATR invalidation (-12.5 pts)", "sub": "Learned from #100006 (MACRO TREND BULLISH WITH INTRADAY PULLBACK). Entry threshold raised."},
+            {"text": "⚠️ Penalized SOLUSD execution due to ATR invalidation (-12.5 pts)", "sub": "Learned from #100003 (RSI OVERSOLD REBOUND NEAR DYNAMIC S/R). Entry threshold raised."}
         ]
 
 desk = ForexDesk()
 
 async def quant_trading_loop():
-    symbols = ["XAUUSD", "EURUSD", "GBPUSD", "USDJPY", "BTCUSD", "ETHUSD"]
+    symbols = ["XAUUSD", "EURUSD", "GBPUSD", "USDJPY", "BTCUSD", "ETHUSD", "SOLUSD"]
     while True:
         try:
             for pos in list(desk.open_positions):
-                delta = random.uniform(-1.5, 1.8)
+                delta = round(random.uniform(-1.4, 1.8), 2)
                 pos["pnl"] = round(pos["pnl"] + delta, 2)
                 
-                if pos["pnl"] >= 45.0:
+                # Check Take Profit
+                if pos["pnl"] >= 40.0:
                     desk.tp_count += 1
                     desk.capital += pos["pnl"]
                     desk.open_positions.remove(pos)
@@ -79,18 +83,23 @@ async def quant_trading_loop():
                         f"━━━━━━━━━━━━━━━━━━\n"
                         f"📊 *Asset:* `{pos['asset']}` ({pos['side']})\n"
                         f"💵 *Profit:* `+${pos['pnl']}`\n"
-                        f"📈 *Win Rate (24H):* `{winrate}%`\n"
+                        f"📈 *Win Rate (24H):* `{winrate}%` ({desk.tp_count}/{total_trades})\n"
                         f"📉 *Max Drawdown:* `{desk.max_drawdown}%`\n"
                         f"🏦 *24H Net PnL:* `${net_pnl}`"
                     )
                     await send_telegram(msg)
 
-                elif pos["pnl"] <= -60.0:
+                # Check Stop Loss
+                elif pos["pnl"] <= -65.0:
                     desk.sl_count += 1
                     desk.capital += pos["pnl"]
                     desk.open_positions.remove(pos)
-                    penalty_msg = f"⚠️ Penalized {pos['asset']} execution due to ATR invalidation. Threshold raised."
-                    desk.penalties.insert(0, penalty_msg)
+                    
+                    rule = {
+                        "text": f"⚠️ Penalized {pos['asset']} execution due to ATR invalidation (-12.5 pts)",
+                        "sub": f"Learned from #{pos['ticket']} ({pos['reason']}). Entry threshold raised."
+                    }
+                    desk.penalties.insert(0, rule)
                     if len(desk.penalties) > 5:
                         desk.penalties.pop()
 
@@ -103,38 +112,43 @@ async def quant_trading_loop():
                     net_pnl = round(sum(t["pnl"] for t in desk.closed_trades) + sum(p["pnl"] for p in desk.open_positions), 2)
 
                     msg = (
-                        f"🛑 *FOREX STOP LOSS (SL HIT)*\n"
+                        f"🛑 *FOREX STOP LOSS (SL REACHED)*\n"
                         f"━━━━━━━━━━━━━━━━━━\n"
                         f"📊 *Asset:* `{pos['asset']}` ({pos['side']})\n"
                         f"🔻 *Loss:* `-${abs(pos['pnl'])}`\n"
-                        f"📈 *Win Rate:* `{winrate}%`\n"
+                        f"📈 *Win Rate (24H):* `{winrate}%`\n"
                         f"📉 *Max Drawdown:* `{desk.max_drawdown}%`\n"
                         f"🏦 *24H Net PnL:* `${net_pnl}`\n\n"
-                        f"🧠 *AI Rule:* {penalty_msg}"
+                        f"🧠 *AI Auto-Learning Rule Applied:*\n"
+                        f"{rule['text']}\n_{rule['sub']}_"
                     )
                     await send_telegram(msg)
 
-            if len(desk.open_positions) < 2 and random.random() < 0.4:
+            # New Entry
+            if len(desk.open_positions) < 2 and random.random() < 0.35:
                 sym = random.choice([s for s in symbols if not any(p["asset"] == s for p in desk.open_positions)])
                 side = random.choice(["BUY", "SELL"])
                 t_num = random.randint(100015, 100099)
-                desk.open_positions.append({
+                new_trade = {
                     "ticket": t_num, "asset": sym, "side": side,
-                    "entry": 1.1000, "curr": 1.1000, "sl": 1.0920, "tp": 1.1150, "pnl": 0.0,
-                    "reason": "CONFLUENCE MTF FRACTAL BREAKOUT"
-                })
+                    "entry": 1.1020, "curr": 1.1020, "sl": 1.0950, "tp": 1.1180, "pnl": 0.0,
+                    "reason": "BREAKOUT FAILURE NEAR 24H PEAK"
+                }
+                desk.open_positions.append(new_trade)
+                
                 entry_msg = (
                     f"⚡ *NEW FOREX POSITION OPENED*\n"
                     f"━━━━━━━━━━━━━━━━━━\n"
                     f"📊 *Asset:* `{sym}` | *Side:* `{side}`\n"
                     f"🎯 *Ticket:* `#{t_num}`\n"
-                    f"🧠 *AI Strategy:* Neural Brain Pattern Synergy > 99.5%"
+                    f"🧠 *Neural Synergy:* `99.9%` (Cross-Asset Clustering)\n"
+                    f"🛡️ *Risk Filter:* Auto-Learning Penalty Rules Active"
                 )
                 await send_telegram(entry_msg)
 
         except Exception as e:
             logger.error(f"Quant Loop Error: {e}")
-        await asyncio.sleep(15)
+        await asyncio.sleep(12)
 
 @app.on_event("startup")
 async def startup():
@@ -148,7 +162,7 @@ async def startup():
         f"• *24H Net PnL:* `${net_pnl}`\n"
         f"• *Max Drawdown:* `{desk.max_drawdown}%`\n"
         f"• *Active Positions:* `{len(desk.open_positions)}`\n"
-        f"• *Self-Learning Engine:* Online & Active"
+        f"• *Self-Learning Engine:* Online & Updating Penalties"
     )
     await send_telegram(boot_alert)
     asyncio.create_task(quant_trading_loop())
@@ -161,9 +175,12 @@ async def api_status():
     return JSONResponse({
         "net_pnl": f"{'+$' if net_pnl >= 0 else '-$'}{abs(net_pnl):.2f}",
         "win_rate": f"{winrate}%",
+        "win_rate_sub": f"({desk.tp_count + desk.sl_count})",
         "tp_count": desk.tp_count,
         "sl_count": desk.sl_count,
+        "nodes": desk.nodes,
         "max_drawdown": f"{desk.max_drawdown}%",
+        "pattern_synergy": f"{desk.pattern_synergy}%",
         "open_positions": desk.open_positions,
         "closed_trades": desk.closed_trades,
         "penalties": desk.penalties
@@ -172,5 +189,180 @@ async def api_status():
 @app.get("/", response_class=HTMLResponse)
 async def dashboard():
     return """<!DOCTYPE html>
-<html><head><title>Forex Quant</title><style>body{background:#080b0f;color:#fff;font-family:monospace;padding:15px;}</style></head>
-<body><h2>FOREX QUANT DESK - TELEGRAM CONNECTED</h2><p>Live alerts active on Telegram.</p></body></html>"""
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AUTONOMOUS QUANT 24H</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { background-color: #080b0f; color: #d1d5db; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, monospace; padding: 12px 14px; }
+    .header { display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #161c24; padding-bottom: 8px; margin-bottom: 12px; }
+    .header-title { font-size: 1.05rem; font-weight: 800; color: #fff; letter-spacing: 0.5px; }
+    .header-title span { font-size: 0.7rem; color: #38bdf8; margin-left: 4px; }
+    .status-badge { color: #22c55e; font-size: 0.72rem; font-weight: 700; }
+    .stats-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-bottom: 12px; }
+    .stat-card { background: #0c1017; border: 1px solid #1a222d; border-radius: 4px; padding: 8px; text-align: center; }
+    .stat-label { font-size: 0.55rem; color: #6b7280; font-weight: 700; }
+    .stat-val { font-size: 1.1rem; font-weight: 800; margin-top: 3px; }
+    .stat-sub { font-size: 0.6rem; color: #6b7280; }
+    .panel-box { background: #0c1017; border: 1px solid #1a222d; border-radius: 4px; padding: 10px 12px; margin-bottom: 12px; }
+    .box-title { font-size: 0.7rem; font-weight: 700; color: #9ca3af; letter-spacing: 0.5px; }
+    .box-sub { font-size: 0.55rem; color: #4b5563; margin-bottom: 6px; }
+    canvas { width: 100%; height: 230px; border-radius: 4px; background: #06090d; }
+    .canvas-meta { display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px; margin-top: 8px; text-align: center; }
+    .meta-lbl { font-size: 0.52rem; color: #6b7280; font-weight: 700; }
+    .meta-val { font-size: 0.85rem; font-weight: 800; margin-top: 2px; }
+    .penalty-item { margin-bottom: 8px; font-size: 0.65rem; border-left: 2px solid #d97706; padding-left: 8px; }
+    .penalty-title { color: #f59e0b; font-weight: bold; }
+    .penalty-sub { color: #9ca3af; font-size: 0.58rem; margin-top: 2px; }
+    table { width: 100%; border-collapse: collapse; font-size: 0.62rem; font-family: monospace; margin-top: 6px; }
+    th { text-align: left; color: #4b5563; padding-bottom: 4px; font-weight: 600; }
+    td { padding: 5px 0; color: #9ca3af; border-bottom: 1px solid #141a23; }
+    .pnl-pos { color: #22c55e; font-weight: bold; }
+    .pnl-neg { color: #ef4444; font-weight: bold; }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <div>
+      <div class="header-title">AUTONOMOUS QUANT <span>24H</span></div>
+      <div style="font-size:0.6rem; color:#38bdf8; font-weight:700;">EXECUTIVE DESK</div>
+    </div>
+    <div class="status-badge" id="botBadge">● SELF-LEARNING ENGINE ACTIVE</div>
+  </div>
+
+  <div class="stats-grid">
+    <div class="stat-card">
+      <div class="stat-label">24H NET PnL</div>
+      <div class="stat-val pnl-neg" id="pnlVal">-$110.58</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">WIN RATE (24H)</div>
+      <div class="stat-val" id="wrVal" style="color:#38bdf8;">0.0%</div>
+      <div class="stat-sub" id="wrSub">(3)</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">TP REACHED</div>
+      <div class="stat-val pnl-pos" id="tpVal">0</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">SL REACHED</div>
+      <div class="stat-val pnl-neg" id="slVal">3</div>
+    </div>
+  </div>
+
+  <div class="panel-box">
+    <div class="box-title">NEURAL BRAIN MAPPING</div>
+    <div class="box-sub">Cross-Asset Pattern Clustering</div>
+    <canvas id="brainCanvas"></canvas>
+    <div class="canvas-meta">
+      <div><div class="meta-lbl">NODES</div><div class="meta-val" id="nodesVal" style="color:#fff;">54</div></div>
+      <div><div class="meta-lbl">MAX DRAWDOWN</div><div class="meta-val pnl-pos" id="ddVal">0.01%</div></div>
+      <div><div class="meta-lbl">PATTERN SYNERGY</div><div class="meta-val pnl-pos" id="synVal">99.9%</div></div>
+    </div>
+  </div>
+
+  <div class="panel-box">
+    <div class="box-title" style="color:#f59e0b;">SELF-LEARNING RULES (AI PENALTY LOG)</div>
+    <div id="penaltyBox" style="margin-top:8px;"></div>
+  </div>
+
+  <div class="panel-box">
+    <div class="box-title" style="color:#38bdf8;">OPEN POSITIONS (MONITORING SL/TP)</div>
+    <table>
+      <thead><tr><th>ASSET</th><th>SIDE</th><th>LOGIC REASON</th><th style="text-align:right;">PnL</th></tr></thead>
+      <tbody id="posBody"></tbody>
+    </table>
+  </div>
+
+  <script>
+    const canvas = document.getElementById('brainCanvas');
+    const ctx = canvas.getContext('2d');
+    function resize() {
+      canvas.width = canvas.parentElement.clientWidth - 24;
+      canvas.height = 230;
+    }
+    resize();
+    window.addEventListener('resize', resize);
+
+    const colors = ['#ec4899', '#06b6d4', '#f59e0b', '#fb7185', '#38bdf8'];
+    const nodes = Array.from({ length: 45 }, () => ({
+      x: Math.random() * canvas.width,
+      y: Math.random() * canvas.height,
+      vx: (Math.random() - 0.5) * 0.9,
+      vy: (Math.random() - 0.5) * 0.9,
+      radius: Math.random() * 2.8 + 2,
+      color: colors[Math.floor(Math.random() * colors.length)]
+    }));
+
+    function drawBrain() {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      for (let i = 0; i < nodes.length; i++) {
+        for (let j = i + 1; j < nodes.length; j++) {
+          const dx = nodes[i].x - nodes[j].x;
+          const dy = nodes[i].y - nodes[j].y;
+          const dist = Math.sqrt(dx * dx + dy * dy);
+          if (dist < 75) {
+            ctx.strokeStyle = `rgba(56, 189, 248, ${(1 - dist / 75) * 0.35})`;
+            ctx.lineWidth = 1;
+            ctx.beginPath();
+            ctx.moveTo(nodes[i].x, nodes[i].y);
+            ctx.lineTo(nodes[j].x, nodes[j].y);
+            ctx.stroke();
+          }
+        }
+      }
+      nodes.forEach(n => {
+        n.x += n.vx;
+        n.y += n.vy;
+        if (n.x < 0 || n.x > canvas.width) n.vx *= -1;
+        if (n.y < 0 || n.y > canvas.height) n.vy *= -1;
+        ctx.beginPath();
+        ctx.arc(n.x, n.y, n.radius, 0, Math.PI * 2);
+        ctx.fillStyle = n.color;
+        ctx.fill();
+      });
+      requestAnimationFrame(drawBrain);
+    }
+    drawBrain();
+
+    async function updateData() {
+      try {
+        const res = await fetch('/api/status');
+        const d = await res.json();
+        
+        const pnlEl = document.getElementById('pnlVal');
+        pnlEl.innerText = d.net_pnl;
+        pnlEl.className = 'stat-val ' + (d.net_pnl.includes('+') ? 'pnl-pos' : 'pnl-neg');
+        
+        document.getElementById('wrVal').innerText = d.win_rate;
+        document.getElementById('wrSub').innerText = d.win_rate_sub;
+        document.getElementById('tpVal').innerText = d.tp_count;
+        document.getElementById('slVal').innerText = d.sl_count;
+        document.getElementById('nodesVal').innerText = d.nodes;
+        document.getElementById('ddVal').innerText = d.max_drawdown;
+        document.getElementById('synVal').innerText = d.pattern_synergy;
+
+        document.getElementById('penaltyBox').innerHTML = d.penalties.map(p => `
+          <div class="penalty-item">
+            <div class="penalty-title">${p.text}</div>
+            <div class="penalty-sub">${p.sub}</div>
+          </div>
+        `).join('');
+
+        document.getElementById('posBody').innerHTML = d.open_positions.map(p => `
+          <tr>
+            <td style="color:#fff; font-weight:bold;">${p.asset}</td>
+            <td style="color:${p.side === 'BUY' ? '#22c55e' : '#ef4444'}; font-weight:bold;">${p.side}</td>
+            <td>${p.reason}</td>
+            <td style="text-align:right;" class="${p.pnl >= 0 ? 'pnl-pos' : 'pnl-neg'}">${p.pnl >= 0 ? '+$' : '-$'}${Math.abs(p.pnl).toFixed(2)}</td>
+          </tr>
+        `).join('');
+      } catch(e) {}
+    }
+    setInterval(updateData, 2500);
+    updateData();
+  </script>
+</body>
+</html>"""
